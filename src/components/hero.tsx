@@ -94,7 +94,7 @@ const Hero = () => {
           <div className="mask-clip-path absolute-center absolute rounded-lg overflow-hidden z-30">
             {/* here the video Wrapper is scaled from 50 to 100*/}
             <div
-              className={`cursor-pointer text-4xl rounded-lg overflow-hidden origin-center transition-all duration-500 ease-in ${
+              className={`cursor-pointer text-4xl rounded-lg overflow-hidden origin-center transition-all duration-400 ease-linear ${
                 isInnerAnimating
                   ? ''
                   : 'scale-50 opacity-0 hover:scale-150 hover:opacity-100 '
