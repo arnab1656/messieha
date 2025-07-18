@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 const Hero = () => {
   const [currentIndex, setCurrentIndex] = useState(1);
@@ -9,7 +10,7 @@ const Hero = () => {
   const [isNextReady, setIsNextReady] = useState(false);
   const [hasClicked, setHasClicked] = useState(false);
   const [isInnerAnimating, setIsInnerAnimating] = useState(false);
-  const [innerPreviewIndex, setInnerPreviewIndex] = useState(3);
+  const [innerPreviewIndex, setInnerPreviewIndex] = useState(2); // Always currentIndex + 1 (wrap if needed)
 
   const currentVideoRef = useRef<HTMLVideoElement>(null);
   const nextVideoRef = useRef<HTMLVideoElement>(null);
@@ -33,6 +34,8 @@ const Hero = () => {
     setIsNextReady(true);
     setHasClicked(true);
   };
+
+  gsap.registerPlugin(ScrollTrigger);
 
   useGSAP(
     () => {
@@ -82,6 +85,24 @@ const Hero = () => {
     },
     { dependencies: [hasClicked, isNextReady], revertOnUpdate: true }
   );
+
+  useGSAP(() => {
+    gsap.set('#video-palyer-total-bg', {
+      clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)',
+      borderRadius: '0% 0% 0% 0%',
+    });
+    gsap.to('#video-palyer-total-bg', {
+      clipPath: 'polygon(52% 0, 52% 0, 84% 89%, 11% 63%)',
+      borderRadius: '0% 0% 0% 0%',
+      ease: 'power1.inOut',
+      scrollTrigger: {
+        trigger: '#video-palyer-total-bg',
+        start: 'center center',
+        end: 'bottom center',
+        scrub: true,
+      },
+    });
+  });
 
   return (
     <section className="relative h-dvh w-screen overflow-x-hidden">
