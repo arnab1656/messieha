@@ -1,172 +1,193 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 const Hero = () => {
   const [currentIndex, setCurrentIndex] = useState(1);
-  const [nextIndex, setNextIndex] = useState(2);
-  const [isPreloading, setIsPreloading] = useState(false);
-  const [isNextReady, setIsNextReady] = useState(false);
   const [hasClicked, setHasClicked] = useState(false);
-  const [isInnerAnimating, setIsInnerAnimating] = useState(false);
-  const [innerPreviewIndex, setInnerPreviewIndex] = useState(2); // Always currentIndex + 1 (wrap if needed)
+  const [isCursorMoving, setIsCursorMoving] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 
-  const currentVideoRef = useRef<HTMLVideoElement>(null);
   const nextVideoRef = useRef<HTMLVideoElement>(null);
+  const cursorTimeoutRef = useRef<number | null>(null);
   const videoLimit = 4;
 
   const getVideoSrc = (index: number) => `/videos/hero-${index}.mp4`;
 
-  // When user clicks, start preloading the next video
-  const handleVideoClick = () => {
-    if (isPreloading) return; // Prevent double click
-    setIsPreloading(true);
-    setIsNextReady(false);
-    const newNextIndex = currentIndex === videoLimit ? 1 : currentIndex + 1;
-    setNextIndex(newNextIndex);
-    const newPreviewIndex = newNextIndex === videoLimit ? 1 : newNextIndex + 1;
-    setInnerPreviewIndex(newPreviewIndex);
-    setIsInnerAnimating(true);
+  // Get next index (wrap around)
+  const getNextIndex = (current: number) => {
+    return current === videoLimit ? 1 : current + 1;
   };
 
-  const handleNextVideoLoaded = () => {
-    setIsNextReady(true);
-    setHasClicked(true);
+  const handleVideoClick = () => {
+    setCurrentIndex(getNextIndex(currentIndex));
   };
+
+  const handleNextVideoLoaded = () => {};
+
+  // Handle cursor movement
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setCursorPosition({ x: e.clientX, y: e.clientY });
+    setIsCursorMoving(true);
+
+    // Clear existing timeout
+    if (cursorTimeoutRef.current) {
+      clearTimeout(cursorTimeoutRef.current);
+    }
+
+    cursorTimeoutRef.current = window.setTimeout(() => {
+      setIsCursorMoving(false);
+    }, 100);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (cursorTimeoutRef.current) {
+        clearTimeout(cursorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   gsap.registerPlugin(ScrollTrigger);
 
+  // Animation for next video lens shape
   useGSAP(
     () => {
-      if (isInnerAnimating) {
-        gsap.fromTo(
-          '#current-video',
-          { scale: 0.09 },
-          {
-            scale: 1.5,
-            duration: 1,
-            ease: 'expo.inOut',
-            onComplete: () => {
-              setIsInnerAnimating(false);
-            },
-          }
-        );
-      }
-    },
-    { dependencies: [isInnerAnimating] }
-  );
-
-  // When animation is done, update the current video
-  useGSAP(
-    () => {
-      if (hasClicked && isNextReady) {
-        gsap.set('#next-video', { scale: 0.8, opacity: 1, display: 'block' });
-        gsap.to('#next-video', {
-          scale: 1,
-          opacity: 1,
-          transformOrigin: 'center center',
-          width: '100%',
-          height: '100%',
-          duration: 1,
-          ease: 'expo.inOut',
-          onStart: () => {
-            nextVideoRef.current?.play();
-          },
-          onComplete: () => {
-            setCurrentIndex(nextIndex);
-            setIsPreloading(false);
-            setHasClicked(false);
-            setIsNextReady(false);
-            setInnerPreviewIndex(nextIndex === videoLimit ? 1 : nextIndex + 1);
-          },
+      if (isCursorMoving) {
+        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
+          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+          duration: 0.5,
+          ease: 'power2.out',
+        });
+      } else {
+        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
+          clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
+          duration: 0.3,
+          ease: 'power2.in',
         });
       }
     },
-    { dependencies: [hasClicked, isNextReady], revertOnUpdate: true }
+    { dependencies: [isCursorMoving, currentIndex] }
   );
 
   useGSAP(() => {
-    gsap.set('#video-palyer-total-bg', {
+    gsap.set('#hero__item__content', {
       clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)',
       borderRadius: '0% 0% 0% 0%',
     });
-    gsap.to('#video-palyer-total-bg', {
-      clipPath: 'polygon(52% 0, 52% 0, 84% 89%, 11% 63%)',
+    gsap.to('#hero__item__content', {
+      clipPath: 'polygon(34% 1%, 64% 1%, 76% 71%, 12% 44%)',
       borderRadius: '0% 0% 0% 0%',
       ease: 'power1.inOut',
       scrollTrigger: {
-        trigger: '#video-palyer-total-bg',
+        trigger: '#hero__item__content',
         start: 'center center',
-        end: 'bottom center',
+        end: 'bottom top',
         scrub: true,
       },
     });
   });
 
   return (
-    <section className="relative h-dvh w-screen overflow-x-hidden">
+    <section className="relative h-dvh w-screen" onMouseMove={handleMouseMove}>
       <div
-        id="video-palyer-total-bg"
-        className="relative z-5 h-dvh w-screen overflow-hidden"
+        id="hero__slides"
+        className="absolute top-0 left-0 z-1 h-full w-full bg-amber-300 opacity-100 text-8xl"
       >
-        <div>
-          {/* This layer is the Limit for the video Wrapper*/}
-          <div className="mask-clip-path absolute-center absolute rounded-lg overflow-hidden z-30">
-            {/* here the video Wrapper is scaled from 50 to 100*/}
-            <div
-              className={`cursor-pointer text-4xl rounded-lg overflow-hidden origin-center transition-all duration-400 ease-linear ${
-                isInnerAnimating
-                  ? ''
-                  : 'scale-50 opacity-0 hover:scale-150 hover:opacity-100 '
-              }`}
-              onClick={handleVideoClick}
-            >
-              {/* Inner clickable video always previews the next-next video */}
-              <video
-                id="current-video"
-                autoPlay
-                src={getVideoSrc(innerPreviewIndex)}
-                ref={currentVideoRef}
-                loop
-                muted
-                className="size-64 origin-center object-cover rounded-lg border-[2px] border-black"
-              ></video>
-            </div>
-          </div>
-        </div>
-        {/* Preload and animate the next video only when preloading */}
-        {isPreloading && (
-          <video
-            src={getVideoSrc(nextIndex)}
-            ref={nextVideoRef}
-            autoPlay
-            loop
-            muted
-            id="next-video"
-            className="z-20 absolute-center absolute size-64 object-cover object-center rounded-lg border border-black"
-            onLoadedData={handleNextVideoLoaded}
-            style={{ pointerEvents: 'none' }}
-          ></video>
-        )}
-        {/* Background video for seamless look */}
-        <video
-          src={getVideoSrc(currentIndex)}
-          autoPlay
-          loop
-          muted
-          className="absolute-center absolute size-full object-cover object-center"
-        ></video>
-      </div>
-      <h1 className="text-6xl text-amber-400 font-zentry absolute right-5 bottom-5 z-35">
-        Gaming
-      </h1>
+        <div
+          id="hit__area"
+          className="absolute top-1/2 left-1/2 cursor-pointer h-1/5 w-1/5 bg-amber-700 opacity-[0.5] transform -translate-x-1/2 -translate-y-1/2 z-100 max-md:top-[60%] max-md:w-1/2 md:w-1/5"
+          onClick={handleVideoClick}
+        ></div>
 
-      <div className="absolute top-0 left-0 size-fit z-35 text-amber-400 font-zentry">
-        <div className="">
-          <h1 className="text-6xl">Messhiah</h1>
-          <p>The Boy from Rosario</p>
+        {/* Cursor movement indicator */}
+        <div className="absolute top-4 right-4 z-50 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
+          Cursor: {isCursorMoving ? 'MOVING' : 'STILL'}
         </div>
+        {[1, 2, 3, 4].map((videoIndex) => {
+          const isCurrent = videoIndex === currentIndex;
+          const isNext = videoIndex === getNextIndex(currentIndex);
+
+          let zIndex = 0;
+          let display = 'none';
+
+          if (isCurrent) {
+            zIndex = 1;
+            display = 'block';
+          } else if (isNext) {
+            zIndex = 2;
+            display = 'block';
+          }
+
+          return (
+            <div
+              key={videoIndex}
+              id={`heroItem-${videoIndex}`}
+              className="absolute h-full w-full top-0 left-0"
+              style={{
+                zIndex: zIndex,
+                display: display,
+              }}
+            >
+              <div
+                id={
+                  isCurrent
+                    ? 'hero__item__content'
+                    : `hero__item__content-${videoIndex}`
+                }
+                className="bg-[#5542ff] absolute top-0 left-0 h-full w-full"
+                style={{
+                  clipPath: isCurrent
+                    ? 'polygon(0 0, 100% 0%, 100% 100%, 0% 100%)'
+                    : // : 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
+                      'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+                }}
+              >
+                <div
+                  id="hero__item__innerWrapper"
+                  className="absolute top-0 left-0 overflow-hidden opacity-100 visible transform translate-x-0 translate-y-0 scale-100 h-full w-full"
+                >
+                  {/* Debug info - remove later */}
+                  <div className="absolute top-4 left-4 z-10 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
+                    {isCurrent ? 'CURRENT' : isNext ? 'NEXT' : 'HIDDEN'} - Video{' '}
+                    {videoIndex}{' '}
+                    {isNext && `(${isCursorMoving ? 'MOVING' : 'STILL'})`}
+                  </div>
+                  <video
+                    src={getVideoSrc(videoIndex)}
+                    autoPlay
+                    muted
+                    loop
+                    className="h-full w-full absolute top-0 left-0 object-cover scale-[1.4]"
+                  ></video>
+                </div>
+                <svg
+                  viewBox="0 0 850 610"
+                  fill="none"
+                  stroke="#000000"
+                  strokeWidth={2}
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ width: '100%', height: 'auto' }}
+                >
+                  <path
+                    d="M838,-3
+     L838,-3
+     Q846,-3 846,5
+     L846,601
+     Q846,609 838,609
+     L5,609
+     Q-3,609 -3,601
+     L-3,5
+     Q-3,-3 5,-3
+     Z"
+                  />
+                </svg>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
