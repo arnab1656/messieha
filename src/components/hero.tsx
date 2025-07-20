@@ -5,17 +5,15 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 const Hero = () => {
   const [currentIndex, setCurrentIndex] = useState(1);
-  const [hasClicked, setHasClicked] = useState(false);
   const [isCursorMoving, setIsCursorMoving] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [isInHitArea, setIsInHitArea] = useState(false);
 
-  const nextVideoRef = useRef<HTMLVideoElement>(null);
   const cursorTimeoutRef = useRef<number | null>(null);
   const videoLimit = 4;
 
   const getVideoSrc = (index: number) => `/videos/hero-${index}.mp4`;
 
-  // Get next index (wrap around)
   const getNextIndex = (current: number) => {
     return current === videoLimit ? 1 : current + 1;
   };
@@ -29,16 +27,24 @@ const Hero = () => {
   // Handle cursor movement
   const handleMouseMove = (e: React.MouseEvent) => {
     setCursorPosition({ x: e.clientX, y: e.clientY });
+
     setIsCursorMoving(true);
 
-    // Clear existing timeout
     if (cursorTimeoutRef.current) {
       clearTimeout(cursorTimeoutRef.current);
     }
 
     cursorTimeoutRef.current = window.setTimeout(() => {
       setIsCursorMoving(false);
-    }, 100);
+    }, 200);
+  };
+
+  const handleHitAreaMouseEnter = () => {
+    setIsInHitArea(true);
+  };
+
+  const handleHitAreaMouseLeave = () => {
+    setIsInHitArea(false);
   };
 
   // Cleanup timeout on unmount
@@ -52,24 +58,32 @@ const Hero = () => {
 
   gsap.registerPlugin(ScrollTrigger);
 
-  // Animation for next video lens shape
+  // Super smooth animation for next video lens shape
   useGSAP(
     () => {
-      if (isCursorMoving) {
+      if (isInHitArea) {
         gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
           clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
-          duration: 0.5,
-          ease: 'power2.out',
+          duration: 1.2,
+          ease: 'power3.out',
+        });
+      } else if (isCursorMoving) {
+        // Cursor is moving - super smooth dot to polygon animation
+        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
+          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+          duration: 1.0,
+          ease: 'back.out(1.7)',
         });
       } else {
+        // Cursor is still - super smooth polygon to dot animation
         gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
           clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
-          duration: 0.3,
-          ease: 'power2.in',
+          duration: 0.8,
+          ease: 'power4.in',
         });
       }
     },
-    { dependencies: [isCursorMoving, currentIndex] }
+    { dependencies: [isCursorMoving, isInHitArea, currentIndex] }
   );
 
   useGSAP(() => {
@@ -98,14 +112,23 @@ const Hero = () => {
       >
         <div
           id="hit__area"
-          className="absolute top-1/2 left-1/2 cursor-pointer h-1/5 w-1/5 bg-amber-700 opacity-[0.5] transform -translate-x-1/2 -translate-y-1/2 z-100 max-md:top-[60%] max-md:w-1/2 md:w-1/5"
+          className="absolute top-1/2 left-1/2 cursor-pointer aspect-square w-1/5 bg-amber-700 opacity-[0.2] transform -translate-x-1/2 -translate-y-1/2 z-100 max-md:top-[60%] max-md:w-1/2 md:w-1/5"
           onClick={handleVideoClick}
+          onMouseEnter={handleHitAreaMouseEnter}
+          onMouseLeave={handleHitAreaMouseLeave}
         ></div>
 
         {/* Cursor movement indicator */}
         <div className="absolute top-4 right-4 z-50 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
           Cursor: {isCursorMoving ? 'MOVING' : 'STILL'}
+          <br />
+          Hit Area: {isInHitArea ? 'INSIDE' : 'OUTSIDE'}
+          <br />
+          Shape: {isInHitArea || isCursorMoving ? 'POLYGON' : 'DOT'}
+          <br />
+          Animation: {isCursorMoving ? 'SMOOTH' : 'IDLE'}
         </div>
+
         {[1, 2, 3, 4].map((videoIndex) => {
           const isCurrent = videoIndex === currentIndex;
           const isNext = videoIndex === getNextIndex(currentIndex);
@@ -141,8 +164,7 @@ const Hero = () => {
                 style={{
                   clipPath: isCurrent
                     ? 'polygon(0 0, 100% 0%, 100% 100%, 0% 100%)'
-                    : // : 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
-                      'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+                    : 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
                 }}
               >
                 <div
@@ -153,7 +175,8 @@ const Hero = () => {
                   <div className="absolute top-4 left-4 z-10 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
                     {isCurrent ? 'CURRENT' : isNext ? 'NEXT' : 'HIDDEN'} - Video{' '}
                     {videoIndex}{' '}
-                    {isNext && `(${isCursorMoving ? 'MOVING' : 'STILL'})`}
+                    {isNext &&
+                      `(${isInHitArea ? 'HIT' : isCursorMoving ? 'MOVING' : 'STILL'})`}
                   </div>
                   <video
                     src={getVideoSrc(videoIndex)}
@@ -164,6 +187,7 @@ const Hero = () => {
                   ></video>
                 </div>
                 <svg
+                  id="example__svg"
                   viewBox="0 0 850 610"
                   fill="none"
                   stroke="#000000"
@@ -171,18 +195,7 @@ const Hero = () => {
                   xmlns="http://www.w3.org/2000/svg"
                   style={{ width: '100%', height: 'auto' }}
                 >
-                  <path
-                    d="M838,-3
-     L838,-3
-     Q846,-3 846,5
-     L846,601
-     Q846,609 838,609
-     L5,609
-     Q-3,609 -3,601
-     L-3,5
-     Q-3,-3 5,-3
-     Z"
-                  />
+                  <path d="M838,-3 L838,-3 Q846,-3 846,5 L846,601 Q846,609 838,609 L5,609 Q-3,609 -3,601 L-3,5 Q-3,-3 5,-3 Z" />
                 </svg>
               </div>
             </div>
@@ -194,3 +207,14 @@ const Hero = () => {
 };
 
 export default Hero;
+
+// reference
+
+// dot ---> polygon
+// polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)
+
+// polygon ---> 50% square
+// polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)
+
+// polygon ---> 100% square
+// polygon(0 0, 100% 0%, 100% 100%, 0% 100%)
