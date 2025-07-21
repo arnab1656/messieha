@@ -41,7 +41,67 @@ const Hero = () => {
   };
 
   const handleVideoClick = () => {
-    setCurrentIndex(getNextIndex(currentIndex));
+    // setCurrentIndex(getNextIndex(currentIndex));
+
+    const nextIndex = getNextIndex(currentIndex);
+    const nextElement = document.getElementById(
+      `hero__item__content-${nextIndex}`
+    );
+
+    if (nextElement) {
+      // Get the computed style instead of inline style
+      const computedStyle = window.getComputedStyle(nextElement);
+      const currentClipPath = computedStyle.clipPath;
+
+      console.log('nextElement is ', nextElement);
+      console.log('currentClipPath is ', currentClipPath);
+
+      if (currentClipPath !== 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)') {
+        // Animate to full screen
+        gsap.killTweensOf(`#hero__item__content-${nextIndex}`, 'clipPath');
+
+        gsap.to(`#hero__item__content-${nextIndex}`, {
+          clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)',
+          ease: 'power1.inOut',
+          duration: 2.5,
+          onComplete: () => {
+            console.log('the clippath change is completed', currentClipPath);
+            gsap.set(`#hero__item__content`, { display: 'none' });
+          },
+        });
+
+        gsap.to(
+          `#hero__item__content-${nextIndex} > #hero__item__innerWrapper`,
+          {
+            scale: 1,
+            ease: 'power1.inOut',
+            duration: 2.5,
+            onComplete: () => {},
+          }
+        );
+      } else {
+        // Animate to square
+        gsap.to(`#hero__item__content-${nextIndex}`, {
+          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+          ease: 'power1.inOut',
+          duration: 2.5,
+          onComplete: () => {
+            gsap.set(`#hero__item__content`, { display: 'block' });
+          },
+        });
+        gsap.to(
+          `#hero__item__content-${nextIndex} > #hero__item__innerWrapper`,
+          {
+            scale: 0.8,
+            ease: 'power1.inOut',
+            duration: 2.5,
+            onComplete: () => {},
+          }
+        );
+      }
+    } else {
+      alert(`Element not found for index ${nextIndex}`);
+    }
   };
 
   // Handle cursor movement
@@ -144,11 +204,11 @@ const Hero = () => {
   gsap.registerPlugin(ScrollTrigger);
 
   useGSAP(() => {
-    gsap.set('#hero__item__content', {
+    gsap.set(`#hero__item__content`, {
       clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)',
       borderRadius: '0% 0% 0% 0%',
     });
-    gsap.to('#hero__item__content', {
+    gsap.to(`#hero__item__content`, {
       clipPath: 'polygon(34% 1%, 64% 1%, 76% 71%, 12% 44%)',
       borderRadius: '0% 0% 0% 0%',
       ease: 'power1.inOut',
@@ -167,9 +227,19 @@ const Hero = () => {
         id="hero__slides"
         className="absolute top-0 left-0 z-1 h-full w-full bg-amber-300 opacity-100 text-8xl"
       >
+        {/* Move button outside video wrapper */}
+        <div
+          className="absolute top-20 left-4 z-100 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded cursor-pointer"
+          onClick={(e) => {
+            // e.stopPropagation();
+            // handleNextVideo();
+          }}
+        >
+          CLICK ME
+        </div>
         <div
           id="hit__area"
-          className="absolute top-1/2 left-1/2 cursor-pointer aspect-square w-1/5 bg-amber-700 opacity-[0.2] transform -translate-x-1/2 -translate-y-1/2 z-100 max-md:top-[60%] max-md:w-1/2 md:w-1/5"
+          className="absolute top-1/2 left-1/2 cursor-pointer aspect-square w-1/5 bg-amber-700 opacity-[0.3] transform -translate-x-1/2 -translate-y-1/2 z-100 max-md:top-[60%] max-md:w-1/2 md:w-1/5"
           onClick={handleVideoClick}
           onMouseEnter={handleHitAreaMouseEnter}
           onMouseLeave={handleHitAreaMouseLeave}
@@ -217,6 +287,7 @@ const Hero = () => {
                     ? 'hero__item__content'
                     : `hero__item__content-${videoIndex}`
                 }
+                // id={`hero__item__content-${videoIndex}`}
                 ref={isNext ? nextElementRef : null}
                 className="bg-[#5542ff] absolute top-0 left-0 h-full w-full"
                 style={{
@@ -227,7 +298,9 @@ const Hero = () => {
               >
                 <div
                   id="hero__item__innerWrapper"
-                  className="absolute top-0 left-0 overflow-hidden opacity-100 visible transform translate-x-0 translate-y-0 scale-100 h-full w-full"
+                  className={`absolute top-0 left-0 overflow-hidden opacity-100 visible transform translate-x-0 translate-y-0 scale-100 h-full w-full ${
+                    isNext ? 'scale-[0.8]' : 'scale-100'
+                  }`}
                 >
                   {/* Debug info - remove later */}
                   <div className="absolute top-4 left-4 z-10 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
@@ -236,14 +309,16 @@ const Hero = () => {
                     {isNext &&
                       `(${isInHitArea ? 'HIT' : isCursorMoving ? 'MOVING' : 'STILL'})`}
                   </div>
+
                   <video
                     src={getVideoSrc(videoIndex)}
                     autoPlay
                     muted
                     loop
-                    className="h-full w-full absolute top-0 left-0 object-cover scale-[1.4]"
+                    className={`h-full w-full absolute top-0 left-0 object-cover scale-[1.4]`}
                   ></video>
                 </div>
+
                 <svg
                   id="example__svg"
                   viewBox="0 0 850 610"
