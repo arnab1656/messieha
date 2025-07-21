@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import MonitorBox from './monitorBox';
 
 const Hero = () => {
   const [currentIndex, setCurrentIndex] = useState(1);
@@ -10,6 +11,11 @@ const Hero = () => {
   const [isInHitArea, setIsInHitArea] = useState(false);
 
   const cursorTimeoutRef = useRef<number | null>(null);
+  const lastCursorPositionRef = useRef({ x: 0, y: 0 });
+  const totalDistanceRef = useRef(0);
+  const nextElementRef = useRef<HTMLDivElement | null>(null);
+  const [isNextVisible, setIsNextVisible] = useState(false);
+
   const videoLimit = 4;
 
   const getVideoSrc = (index: number) => `/videos/hero-${index}.mp4`;
@@ -18,15 +24,76 @@ const Hero = () => {
     return current === videoLimit ? 1 : current + 1;
   };
 
+  // Calculate polygon based on cursor distance
+  const getPolygonFromDistance = (distance: number) => {
+    const maxDistance = 50;
+    const progress = Math.min(distance / maxDistance, 1);
+
+    // Start: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%) - dot
+    // End: polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%) - square
+
+    const startPercent = 50;
+    const endPercent = 25;
+    const currentPercent =
+      startPercent - progress * (startPercent - endPercent);
+
+    return `polygon(${currentPercent}% ${currentPercent}%, ${100 - currentPercent}% ${currentPercent}%, ${100 - currentPercent}% ${100 - currentPercent}%, ${currentPercent}% ${100 - currentPercent}%)`;
+  };
+
   const handleVideoClick = () => {
     setCurrentIndex(getNextIndex(currentIndex));
   };
 
-  const handleNextVideoLoaded = () => {};
-
   // Handle cursor movement
   const handleMouseMove = (e: React.MouseEvent) => {
-    setCursorPosition({ x: e.clientX, y: e.clientY });
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+
+    setCursorPosition({ x: currentX, y: currentY });
+
+    // Calculate distance moved (skip first move to avoid large initial distance)
+    if (
+      lastCursorPositionRef.current.x !== 0 ||
+      lastCursorPositionRef.current.y !== 0
+    ) {
+      const deltaX = currentX - lastCursorPositionRef.current.x;
+      const deltaY = currentY - lastCursorPositionRef.current.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      // Add to total distance
+      totalDistanceRef.current += distance;
+    }
+
+    // Update last position
+    lastCursorPositionRef.current = { x: currentX, y: currentY };
+
+    if (nextElementRef.current) {
+      // If in hit area, always animate to square regardless of distance
+      if (isInHitArea) {
+        gsap.killTweensOf(nextElementRef.current, 'clipPath');
+        gsap.set(nextElementRef.current, { display: 'block' });
+        setIsNextVisible(true);
+        gsap.to(nextElementRef.current, {
+          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+          duration: 0.5,
+          ease: 'power2.out',
+        });
+      } else {
+        // Normal distance-based animation outside hit area
+        const targetPolygon = getPolygonFromDistance(totalDistanceRef.current);
+        const progress = Math.min(totalDistanceRef.current / 50, 1);
+        const duration = 0.1 + progress * 0.2;
+
+        gsap.killTweensOf(nextElementRef.current, 'clipPath');
+        gsap.set(nextElementRef.current, { display: 'block' });
+        setIsNextVisible(true);
+        gsap.to(nextElementRef.current, {
+          clipPath: targetPolygon,
+          duration: duration,
+          ease: 'power2.out',
+        });
+      }
+    }
 
     setIsCursorMoving(true);
 
@@ -36,7 +103,25 @@ const Hero = () => {
 
     cursorTimeoutRef.current = window.setTimeout(() => {
       setIsCursorMoving(false);
-    }, 200);
+      // Reset distance when cursor stops
+      totalDistanceRef.current = 0;
+
+      // Only animate back to dot if NOT in hit area
+      if (nextElementRef.current && !isInHitArea) {
+        gsap.killTweensOf(nextElementRef.current, 'clipPath');
+        gsap.set(nextElementRef.current, { display: 'block' });
+
+        gsap.to(nextElementRef.current, {
+          clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
+          duration: 2,
+          ease: 'power3.out',
+          onComplete: () => {
+            gsap.set(nextElementRef.current, { display: 'none' });
+            setIsNextVisible(false);
+          },
+        });
+      }
+    }, 300);
   };
 
   const handleHitAreaMouseEnter = () => {
@@ -57,34 +142,6 @@ const Hero = () => {
   }, []);
 
   gsap.registerPlugin(ScrollTrigger);
-
-  // Super smooth animation for next video lens shape
-  useGSAP(
-    () => {
-      if (isInHitArea) {
-        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
-          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
-          duration: 1.2,
-          ease: 'power3.out',
-        });
-      } else if (isCursorMoving) {
-        // Cursor is moving - super smooth dot to polygon animation
-        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
-          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
-          duration: 1.0,
-          ease: 'back.out(1.7)',
-        });
-      } else {
-        // Cursor is still - super smooth polygon to dot animation
-        gsap.to(`#hero__item__content-${getNextIndex(currentIndex)}`, {
-          clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
-          duration: 0.8,
-          ease: 'power4.in',
-        });
-      }
-    },
-    { dependencies: [isCursorMoving, isInHitArea, currentIndex] }
-  );
 
   useGSAP(() => {
     gsap.set('#hero__item__content', {
@@ -118,16 +175,16 @@ const Hero = () => {
           onMouseLeave={handleHitAreaMouseLeave}
         ></div>
 
-        {/* Cursor movement indicator */}
-        <div className="absolute top-4 right-4 z-50 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
-          Cursor: {isCursorMoving ? 'MOVING' : 'STILL'}
-          <br />
-          Hit Area: {isInHitArea ? 'INSIDE' : 'OUTSIDE'}
-          <br />
-          Shape: {isInHitArea || isCursorMoving ? 'POLYGON' : 'DOT'}
-          <br />
-          Animation: {isCursorMoving ? 'SMOOTH' : 'IDLE'}
-        </div>
+        {/* test monitoring */}
+
+        <MonitorBox
+          show={false}
+          isCursorMoving={isCursorMoving}
+          isInHitArea={isInHitArea}
+          isNextVisible={isNextVisible}
+          totalDistanceRef={totalDistanceRef}
+          nextElementRef={nextElementRef}
+        />
 
         {[1, 2, 3, 4].map((videoIndex) => {
           const isCurrent = videoIndex === currentIndex;
@@ -141,7 +198,7 @@ const Hero = () => {
             display = 'block';
           } else if (isNext) {
             zIndex = 2;
-            display = 'block';
+            display = isNextVisible ? 'block' : 'none';
           }
 
           return (
@@ -160,6 +217,7 @@ const Hero = () => {
                     ? 'hero__item__content'
                     : `hero__item__content-${videoIndex}`
                 }
+                ref={isNext ? nextElementRef : null}
                 className="bg-[#5542ff] absolute top-0 left-0 h-full w-full"
                 style={{
                   clipPath: isCurrent
