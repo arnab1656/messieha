@@ -16,6 +16,8 @@ const Hero = () => {
   const nextElementRef = useRef<HTMLDivElement | null>(null);
   const [isNextVisible, setIsNextVisible] = useState(false);
 
+  const isAnimating = useRef(false);
+
   const videoLimit = 4;
 
   const getVideoSrc = (index: number) => `/videos/hero-${index}.mp4`;
@@ -57,8 +59,14 @@ const Hero = () => {
       console.log('currentClipPath is ', currentClipPath);
 
       if (currentClipPath !== 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)') {
+        isAnimating.current = true;
+
         // Animate to full screen
         gsap.killTweensOf(`#hero__item__content-${nextIndex}`, 'clipPath');
+
+        gsap.set(`#heroItem-${nextIndex}`, {
+          zIndex: 1,
+        });
 
         gsap.to(`#hero__item__content-${nextIndex}`, {
           clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)',
@@ -66,7 +74,18 @@ const Hero = () => {
           duration: 2.5,
           onComplete: () => {
             console.log('the clippath change is completed', currentClipPath);
-            gsap.set(`#hero__item__content`, { display: 'none' });
+            // gsap.set(`#hero__item__content`, { display: 'none' });
+
+            gsap.set(`#heroItem-${currentIndex}`, {
+              zIndex: 0,
+              display: 'none',
+            });
+
+            gsap.set(`#heroItem-${getNextIndex(currentIndex)}`, {
+              zIndex: 1,
+            });
+
+            isAnimating.current = false;
           },
         });
 
@@ -79,14 +98,40 @@ const Hero = () => {
             onComplete: () => {},
           }
         );
+
+        // Animate the next to next video from dot to  square
+
+        const nextToNextIndex = getNextIndex(nextIndex);
+
+        gsap.set(`#heroItem-${nextToNextIndex}`, {
+          zIndex: 2,
+          display: 'block',
+        });
+
+        gsap.to(`#hero__item__content-${nextToNextIndex}`, {
+          clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
+          ease: 'power1.inOut',
+          duration: 2.5,
+          onComplete: () => {
+            console.log('the next to next video is now visible');
+          },
+        });
       } else {
-        // Animate to square
+        isAnimating.current = true;
+
+        // Animate the next video to square
         gsap.to(`#hero__item__content-${nextIndex}`, {
           clipPath: 'polygon(25% 25%, 75% 25%, 75% 75%, 25% 75%)',
           ease: 'power1.inOut',
           duration: 2.5,
           onComplete: () => {
-            gsap.set(`#hero__item__content`, { display: 'block' });
+            // gsap.set(`#hero__item__content`, { display: 'block' });
+
+            gsap.set(`#heroItem-${currentIndex}`, {
+              zIndex: 1,
+              display: 'block',
+            });
+            isAnimating.current = false;
           },
         });
         gsap.to(
@@ -106,12 +151,13 @@ const Hero = () => {
 
   // Handle cursor movement
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (isAnimating.current) return;
+
     const currentX = e.clientX;
     const currentY = e.clientY;
 
     setCursorPosition({ x: currentX, y: currentY });
 
-    // Calculate distance moved (skip first move to avoid large initial distance)
     if (
       lastCursorPositionRef.current.x !== 0 ||
       lastCursorPositionRef.current.y !== 0
@@ -120,15 +166,16 @@ const Hero = () => {
       const deltaY = currentY - lastCursorPositionRef.current.y;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-      // Add to total distance
       totalDistanceRef.current += distance;
     }
 
-    // Update last position
     lastCursorPositionRef.current = { x: currentX, y: currentY };
 
-    if (nextElementRef.current) {
-      // If in hit area, always animate to square regardless of distance
+    const nextElement = document.getElementById(
+      `heroItem-${getNextIndex(currentIndex)}`
+    );
+
+    if (nextElement) {
       if (isInHitArea) {
         gsap.killTweensOf(nextElementRef.current, 'clipPath');
         gsap.set(nextElementRef.current, { display: 'block' });
@@ -139,19 +186,31 @@ const Hero = () => {
           ease: 'power2.out',
         });
       } else {
-        // Normal distance-based animation outside hit area
         const targetPolygon = getPolygonFromDistance(totalDistanceRef.current);
         const progress = Math.min(totalDistanceRef.current / 50, 1);
         const duration = 0.1 + progress * 0.2;
 
-        gsap.killTweensOf(nextElementRef.current, 'clipPath');
-        gsap.set(nextElementRef.current, { display: 'block' });
+        gsap.killTweensOf(
+          nextElement.querySelector(
+            `#hero__item__content-${getNextIndex(currentIndex)}`
+          ),
+          'clipPath'
+        );
+
+        gsap.set(nextElement, { display: 'block' });
+
         setIsNextVisible(true);
-        gsap.to(nextElementRef.current, {
-          clipPath: targetPolygon,
-          duration: duration,
-          ease: 'power2.out',
-        });
+
+        gsap.to(
+          nextElement.querySelector(
+            `#hero__item__content-${getNextIndex(currentIndex)}`
+          ),
+          {
+            clipPath: targetPolygon,
+            duration: duration,
+            ease: 'power2.out',
+          }
+        );
       }
     }
 
@@ -163,23 +222,31 @@ const Hero = () => {
 
     cursorTimeoutRef.current = window.setTimeout(() => {
       setIsCursorMoving(false);
-      // Reset distance when cursor stops
+
       totalDistanceRef.current = 0;
 
-      // Only animate back to dot if NOT in hit area
-      if (nextElementRef.current && !isInHitArea) {
-        gsap.killTweensOf(nextElementRef.current, 'clipPath');
-        gsap.set(nextElementRef.current, { display: 'block' });
+      if (nextElement && !isInHitArea) {
+        gsap.killTweensOf(
+          nextElement.querySelector(
+            `#hero__item__content-${getNextIndex(currentIndex)}`
+          ),
+          'clipPath'
+        );
 
-        gsap.to(nextElementRef.current, {
-          clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
-          duration: 2,
-          ease: 'power3.out',
-          onComplete: () => {
-            gsap.set(nextElementRef.current, { display: 'none' });
-            setIsNextVisible(false);
-          },
-        });
+        gsap.to(
+          nextElement.querySelector(
+            `#hero__item__content-${getNextIndex(currentIndex)}`
+          ),
+          {
+            clipPath: 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
+            duration: 2,
+            ease: 'power3.out',
+            onComplete: () => {
+              gsap.set(nextElement, { display: 'none' });
+              setIsNextVisible(false);
+            },
+          }
+        );
       }
     }, 300);
   };
@@ -204,16 +271,16 @@ const Hero = () => {
   gsap.registerPlugin(ScrollTrigger);
 
   useGSAP(() => {
-    gsap.set(`#hero__item__content`, {
+    gsap.set(`#hero__item__content-${currentIndex}`, {
       clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)',
       borderRadius: '0% 0% 0% 0%',
     });
-    gsap.to(`#hero__item__content`, {
+    gsap.to(`#hero__item__content-${currentIndex}`, {
       clipPath: 'polygon(34% 1%, 64% 1%, 76% 71%, 12% 44%)',
       borderRadius: '0% 0% 0% 0%',
       ease: 'power1.inOut',
       scrollTrigger: {
-        trigger: '#hero__item__content',
+        trigger: `#hero__item__content-${currentIndex}`,
         start: 'center center',
         end: 'bottom top',
         scrub: true,
@@ -228,13 +295,7 @@ const Hero = () => {
         className="absolute top-0 left-0 z-1 h-full w-full bg-amber-300 opacity-100 text-8xl"
       >
         {/* Move button outside video wrapper */}
-        <div
-          className="absolute top-20 left-4 z-100 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded cursor-pointer"
-          onClick={(e) => {
-            // e.stopPropagation();
-            // handleNextVideo();
-          }}
-        >
+        <div className="absolute top-20 left-4 z-100 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded cursor-pointer">
           CLICK ME
         </div>
         <div
@@ -263,12 +324,12 @@ const Hero = () => {
           let zIndex = 0;
           let display = 'none';
 
-          if (isCurrent) {
+          if (videoIndex === 1) {
             zIndex = 1;
             display = 'block';
-          } else if (isNext) {
+          } else if (videoIndex === 2) {
             zIndex = 2;
-            display = isNextVisible ? 'block' : 'none';
+            display = 'none';
           }
 
           return (
@@ -282,18 +343,14 @@ const Hero = () => {
               }}
             >
               <div
-                id={
-                  isCurrent
-                    ? 'hero__item__content'
-                    : `hero__item__content-${videoIndex}`
-                }
-                // id={`hero__item__content-${videoIndex}`}
-                ref={isNext ? nextElementRef : null}
+                id={`hero__item__content-${videoIndex}`}
+                // ref={isNext ? nextElementRef : null}
                 className="bg-[#5542ff] absolute top-0 left-0 h-full w-full"
                 style={{
-                  clipPath: isCurrent
-                    ? 'polygon(0 0, 100% 0%, 100% 100%, 0% 100%)'
-                    : 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
+                  clipPath:
+                    videoIndex === 1
+                      ? 'polygon(0 0, 100% 0%, 100% 100%, 0% 100%)'
+                      : 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)',
                 }}
               >
                 <div
